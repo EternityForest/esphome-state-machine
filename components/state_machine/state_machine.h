@@ -14,6 +14,14 @@ namespace esphome
       std::string to_state;
     };
 
+    class StateTimer
+    {
+      std::string in_state;
+      std::string input;
+      std::string timer_id;
+      int time;
+    };
+
     class StateMachineComponent : public Component
     {
     public:
@@ -47,12 +55,40 @@ namespace esphome
         this->transitions_.push_back(transition);
       }
 
+      void add_timer(const StateTimer &timer) {
+        this->timers_.push_back(timers);
+      }
+
+      void setup_timers()
+      {
+        for (StateTimer &timer : this->timers_)
+        {
+          if (timer.in_state == this->current_state_)
+            auto evt = timer.input;
+            auto f = [evt,this]{
+                this.transition(evt);
+            };
+            this.set_timeout(timer.timer_id, timer.id, f);
+        }
+      }
+
+      void clear_timers()
+      {
+        for (StateTimer &timer : this->timers_)
+        {
+          if (timer.in_state == this->current_state_)
+            this.cancel_timeout(timer.timer_id);
+        }
+      }
+
     protected:
       std::string name_;
 
       std::vector<std::string> states_;
       std::vector<std::string> inputs_;
       std::vector<StateTransition> transitions_;
+      std::vector<StateTimers> timers_;
+
       std::string current_state_;
       optional<StateTransition> last_transition_;
 

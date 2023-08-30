@@ -1,3 +1,4 @@
+#include "scheduler.h"
 #include "state_machine.h"
 #include "esphome/core/log.h"
 
@@ -50,6 +51,13 @@ namespace esphome
       {
         ESP_LOGCONFIG(TAG, "  %s: %s -> %s", transition.input.c_str(), transition.from_state.c_str(), transition.to_state.c_str());
       }
+
+
+      ESP_LOGCONFIG(TAG, "Timers: %d", this->timers.size());
+      for (StateTimer &timer : this->timers)
+      {
+        ESP_LOGCONFIG(TAG, "  %s: %dms -> %s", transition.in_state.c_str(), transition.time, transition.input.c_str());
+      }
     }
 
     optional<StateTransition> StateMachineComponent::get_transition(const std::string &input)
@@ -80,7 +88,9 @@ namespace esphome
       if (state != this->current_state_)
       {
         ESP_LOGD(TAG, "State set to %s", state.c_str());
+        this->clear_timers();
         this->current_state_ = state;
+        this->setup_timers();
         this->set_callback_.call(state);
       }
     }
@@ -93,7 +103,9 @@ namespace esphome
         this->before_transition_callback_.call(transition.value());
         ESP_LOGD(TAG, "%s: transitioned from %s to %s", input.c_str(), transition.value().from_state.c_str(), transition.value().to_state.c_str());
         this->last_transition_ = transition;
+        this->clear_timers();
         this->current_state_ = transition.value().to_state;
+        this->setup_timers();
         this->after_transition_callback_.call(transition.value());
       }
       else

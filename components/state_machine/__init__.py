@@ -12,7 +12,8 @@ from esphome.const import (
     CONF_FROM,
     CONF_TO,
     CONF_STATE,
-    CONF_VALUE
+    CONF_VALUE,
+    CONF_DURATION
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 state_machine_ns = cg.esphome_ns.namespace("state_machine")
 
 StateTransition = state_machine_ns.struct("StateTransition")
+StateTimer = state_machine_ns.struct("StateTimer")
 
 StateMachine = state_machine_ns.class_("StateMachine")
 
@@ -76,6 +78,7 @@ CONF_BEFORE_TRANSITION_KEY = 'before_transition'
 CONF_ON_TRANSITION_KEY = 'on_transition'
 CONF_AFTER_TRANSITION_KEY = 'after_transition'
 CONF_ON_INPUT_KEY = 'on_input'
+CONF_STATE_TIMERS_KEY = 'timers'
 
 # deprecated
 CONF_INPUT_TRANSITIONS_ACTION_KEY = 'action'
@@ -212,6 +215,13 @@ CONFIG_SCHEMA = cv.All(
                                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(StateMachineOnLeaveTrigger),
                             }
                         ),
+                        cv.Optional(CONF_STATE_TIMERS_KEY):
+                            cv.ensure_list({
+                                cv.Required(CONF_NAME): cv.string_strict,
+                                cv.Required(CONF_DURATION): cv.int,
+                            }
+                            )
+                        }
                     },
                     key=CONF_NAME
                 )), cv.Length(min=1), unique_names
@@ -294,6 +304,19 @@ async def to_code(config):
                     action[CONF_TRIGGER_ID], var, state[CONF_NAME]
                 )
                 await automation.build_automation(trigger, [], action)
+
+        for timer in input[CONF_STATE_TIMERS_KEY]:
+            cg.add(
+                var.add_timer(
+                    cg.StructInitializer(
+                        StateTimer,
+                        ("in_state", state[CONF_NAME]),
+                        ("input", timer[CONF_NAME]),
+                        ("time", transition[CONF_DURATION]),
+                        ("timer_id","SM" + config[CONF_ID] + state[CONF_NAME] + timer[CONF_NAME] + str(transition[CONF_DURATION]))
+                    )
+                )
+            ) 
 
     # setup transition/input automations (they should run first)
     for input in config[CONF_INPUTS_KEY]:
@@ -392,6 +415,16 @@ async def to_code(config):
         key=CONF_STATE
     ),
 )
+
+@automation.register_action(
+    "state_machine.reset_timers",
+    StateMachineSetAction,
+        {
+            cv.GenerateID(): cv.use_id(StateMachineComponent),
+        }
+    )
+
+
 def state_machine_set_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg, config[CONF_STATE])
     yield cg.register_parented(var, config[CONF_ID])
